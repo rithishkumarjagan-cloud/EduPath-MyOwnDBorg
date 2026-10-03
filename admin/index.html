@@ -1,1 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EduPath Admin Application</title>
+<style>
+:root{--primary:#4f46e5;--primary2:#06b6d4;--bg:#f5f7fb;--text:#172033;--muted:#64748b;--border:#e5e7eb;--white:#fff;--danger:#dc2626;--success:#059669}
+*{box-sizing:border-box}
+body{margin:0;font-family:Inter,Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--text)}
+header{background:linear-gradient(135deg,#312e81,#4f46e5,#0891b2);color:#fff;padding:24px 5%;display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap;box-shadow:0 8px 30px #0002}
+.brand h1{margin:0;font-size:28px}.brand p{margin:6px 0 0;opacity:.85}
+.actions{display:flex;gap:10px;flex-wrap:wrap}
+button{border:0;border-radius:10px;padding:11px 16px;font-weight:700;cursor:pointer;transition:.2s;font-size:14px}
+button:hover{transform:translateY(-1px)}
+.btn-light{background:#fff;color:#3730a3}.btn-primary{background:#4f46e5;color:#fff}.btn-success{background:#059669;color:#fff}.btn-danger{background:#fee2e2;color:#991b1b}
+main{max-width:1250px;margin:28px auto;padding:0 20px}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:20px}
+.stat{background:var(--white);border:1px solid var(--border);border-radius:16px;padding:20px;box-shadow:0 6px 24px #0000000b}
+.stat .label{color:var(--muted);font-size:14px}.stat .value{font-size:30px;font-weight:800;margin-top:8px;color:var(--primary)}
+.card{background:var(--white);border:1px solid var(--border);border-radius:18px;padding:20px;box-shadow:0 6px 24px #0000000b;margin-bottom:20px}
+.toolbar{display:flex;gap:12px;justify-content:space-between;align-items:center;flex-wrap:wrap}
+.search{width:min(420px,100%);padding:12px 14px;border:1px solid #cbd5e1;border-radius:10px;font-size:15px;outline:none}.search:focus{border-color:var(--primary)}
+.table-wrap{overflow:auto;margin-top:18px;border:1px solid var(--border);border-radius:12px}
+table{width:100%;border-collapse:collapse;min-width:850px}th,td{padding:13px 14px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap}th{background:#f8fafc;font-size:13px;color:#475569}tbody tr:hover{background:#f8fafc}tbody tr:last-child td{border-bottom:0}
+.badge{display:inline-block;padding:5px 9px;border-radius:999px;background:#eef2ff;color:#3730a3;font-size:12px;font-weight:700}
+.status{margin-top:12px;font-size:14px;color:var(--success)}.error{color:var(--danger)}
+.empty{text-align:center;padding:35px;color:var(--muted)}
+footer{text-align:center;color:var(--muted);padding:25px}
+@media(max-width:900px){.grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:560px){.grid{grid-template-columns:1fr}.brand h1{font-size:23px}main{padding:0 12px}}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <h1>📚 EduPath Admin Application</h1>
+    <p>MyOwnDB • User Management & Excel Export</p>
+  </div>
+  <div class="actions">
+    <button class="btn-light" onclick="loadUsers()">🔄 Refresh</button>
+    <button class="btn-success" onclick="exportExcel()">📊 Export to Excel</button>
+  </div>
+</header>
+
+<main>
+  <section class="grid">
+    <div class="stat"><div class="label">Total Users</div><div id="total" class="value">0</div></div>
+    <div class="stat"><div class="label">Students</div><div id="students" class="value">0</div></div>
+    <div class="stat"><div class="label">Courses Selected</div><div id="courses" class="value">0</div></div>
+    <div class="stat"><div class="label">Database Status</div><div id="dbStatus" class="value" style="font-size:22px">Checking...</div></div>
+  </section>
+
+  <section class="card">
+    <div class="toolbar">
+      <div>
+        <h2 style="margin:0 0 5px">Registered Users</h2>
+        <div style="color:#64748b;font-size:14px">Users registered through the EduPath website.</div>
+      </div>
+      <input id="search" class="search" type="search" placeholder="🔍 Search name, role or course..." oninput="renderUsers()">
+    </div>
+
+    <div id="status" class="status">Loading users...</div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>S.No</th><th>User ID</th><th>Name</th><th>Age</th><th>Role</th><th>Preferred Course</th><th>Registered</th>
+          </tr>
+        </thead>
+        <tbody id="users"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2 style="margin-top:0">How it works</h2>
+    <p>1. User registers on the EduPath website.</p>
+    <p>2. MyOwnDB stores the user in <b>database/users.json</b>.</p>
+    <p>3. This admin application reads the data from <b>http://localhost:5000/users</b>.</p>
+    <p>4. Click <b>Export to Excel</b> to download <b>EduPath_Users.xlsx</b>.</p>
+  </section>
+</main>
+
+<footer>EduPath • MyOwnDB Admin Application</footer>
+
+<script>
+const API = 'https://edupath-myowndborg.onrender.com';
+let allUsers = [];
+
+function escapeHtml(value) {
+  return String(value ?? '-')
+    .replaceAll('&','&amp;').replaceAll('<','&lt;')
+    .replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#039;');
+}
+
+function renderUsers(){
+  const query = document.getElementById('search').value.trim().toLowerCase();
+  const tbody = document.getElementById('users');
+  const filtered = allUsers.filter(u => {
+    const text = `${u.name} ${u.role} ${u.preferredCourse || ''} ${u.id}`.toLowerCase();
+    return text.includes(query);
+  });
+
+  if(!filtered.length){
+    tbody.innerHTML = '<tr><td colspan="7" class="empty">No users found.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = filtered.map((u,i)=>`
+    <tr>
+      <td>${i+1}</td>
+      <td><span class="badge">${escapeHtml(u.id)}</span></td>
+      <td><b>${escapeHtml(u.name)}</b></td>
+      <td>${escapeHtml(u.age)}</td>
+      <td>${escapeHtml(u.role)}</td>
+      <td>${escapeHtml(u.preferredCourse || '-')}</td>
+      <td>${u.createdAt ? new Date(u.createdAt).toLocaleString() : '-'}</td>
+    </tr>`).join('');
+}
+
+async function loadUsers(){
+  const status = document.getElementById('status');
+  const dbStatus = document.getElementById('dbStatus');
+  status.className = 'status';
+  status.textContent = 'Loading users...';
+  dbStatus.textContent = 'Checking...';
+
+  try{
+    const response = await fetch(`${API}/users`);
+    if(!response.ok) throw new Error('API error');
+    allUsers = await response.json();
+
+    document.getElementById('total').textContent = allUsers.length;
+    document.getElementById('students').textContent = allUsers.filter(u => String(u.role).toLowerCase() === 'student').length;
+    document.getElementById('courses').textContent = new Set(allUsers.map(u => u.preferredCourse).filter(Boolean)).size;
+    dbStatus.textContent = '🟢 Online';
+    status.textContent = `Loaded ${allUsers.length} user(s) from MyOwnDB.`;
+    renderUsers();
+  }catch(error){
+    allUsers = [];
+    renderUsers();
+    dbStatus.textContent = '🔴 Offline';
+    status.className = 'status error';
+    status.textContent = 'Cannot connect to MyOwnDB. Start server.js first.';
+  }
+}
+
+function exportExcel(){
+  window.location.href = `${API}/export-excel`;
+}
+
+loadUsers();
+</script>
+</body>
+</html>
 
